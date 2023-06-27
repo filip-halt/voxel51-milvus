@@ -18,6 +18,9 @@ from fiftyone.brain.similarity import (
     SimilarityIndex,
 )
 
+import fiftyone.brain.internal.core.utils as fbu
+
+
 pymilvus = fou.lazy_import("pymilvus")
 
 
@@ -27,6 +30,7 @@ _SUPPORTED_METRICS = {
     "dotproduct": "IP",
     "euclidean": "L2",
 }
+
 
 class MilvusSimilarityConfig(SimilarityConfig):
     """Configuration for the Milvus similarity backend.
@@ -47,9 +51,11 @@ class MilvusSimilarityConfig(SimilarityConfig):
         uri (str):  full address of Milvus server.
         user (str): username if using rbac.
         password(str): password for supplied username.
-        consistency_level(str): which consistency level to use. Possible values are Strong, Session, Bounded, Eventually.
+        consistency_level(str): which consistency level to use. Possible values are 
+            Strong, Session, Bounded, Eventually.
         overwrite(str): whether to overwrite the collection if it already exists.
     """
+
     def __init__(
         self,
         embeddings_field=None,
@@ -57,10 +63,10 @@ class MilvusSimilarityConfig(SimilarityConfig):
         patches_field=None,
         supports_prompts=None,
         metric="euclidean",
-        collection_name: str = "ClientCollection",
+        collection_name: str = None,
         uri: str = "http://localhost:19530",
-        user: str = "",
-        password: str = "",
+        user: str = None,
+        password: str = None,
         consistency_level: str = "Session",
         **kwargs,
     ):
@@ -80,8 +86,8 @@ class MilvusSimilarityConfig(SimilarityConfig):
         self.metric = metric
         self.collection_name = collection_name
         self._uri = uri
-        self.user = user
-        self.password = password
+        self._user = user
+        self._password = password
         self.consistency_level = consistency_level
         self.index_params = {
             "metric_type": _SUPPORTED_METRICS[metric],
@@ -103,6 +109,22 @@ class MilvusSimilarityConfig(SimilarityConfig):
     @uri.setter
     def uri(self, uri):
         self._uri = uri
+
+    @property
+    def user(self):
+        return self._user
+
+    @user.setter
+    def user(self, user):
+        self._user = user
+
+    @property
+    def password(self):
+        return self._password
+
+    @password.setter
+    def password(self, password):
+        self._password = password
 
     @property
     def max_k(self):
@@ -158,6 +180,14 @@ class MilvusSimilarityIndex(SimilarityIndex):
             self.config.uri, self.config.user, self.config.password
         )
 
+        if self.config.collection_name is None:
+            root = "fiftyone-" + fou.to_slug(self.samples._root_dataset.name)
+            collection_name = fbu.get_unique_name(
+                root, utility.list_collections(using=self.alias)
+            )
+            self.config.collection_name = collection_name.replace("-", "_")
+            self.save_config()
+
         self._init_collection()
 
     def _connect(self, uri, user, password):
@@ -179,13 +209,6 @@ class MilvusSimilarityIndex(SimilarityIndex):
         if utility.has_collection(self.config.collection_name, using=self.alias):
             col = Collection(self.config.collection_name, using=self.alias)
             col.load()
-            for x in col.schema.fields:
-                if x.params.get("dim", None) is not None:
-                    dim = x.params["dim"]
-                    break
-            return (col, dim)
-
-        return None, None
 
     @property
     def total_index_size(self):
