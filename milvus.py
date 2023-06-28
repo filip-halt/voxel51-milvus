@@ -138,8 +138,8 @@ class MilvusSimilarityConfig(SimilarityConfig):
     def supported_aggregations(self):
         return ("mean",)
 
-    def load_credentials(self, uri=None):
-        self._load_parameters(uri=uri)
+    def load_credentials(self, uri=None, user=None, password=None):
+        self._load_parameters(uri=uri, user=user, password=password)
 
 
 class MilvusSimilarity(Similarity):
